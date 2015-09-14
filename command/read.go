@@ -1,19 +1,30 @@
 package command
 
 import (
+	"flag"
 	"fmt"
 	"strings"
+
+	"github.com/hashicorp/vault/api"
 )
 
 // ReadCommand is a Command that reads data from the Vault.
 type ReadCommand struct {
 	Meta
+	List bool
 }
 
 func (c *ReadCommand) Run(args []string) int {
 	var format string
 	var field string
-	flags := c.Meta.FlagSet("read", FlagSetDefault)
+	var err error
+	var secret *api.Secret
+	var flags *flag.FlagSet
+	if c.List {
+		flags = c.Meta.FlagSet("list", FlagSetDefault)
+	} else {
+		flags = c.Meta.FlagSet("read", FlagSetDefault)
+	}
 	flags.StringVar(&format, "format", "table", "")
 	flags.StringVar(&field, "field", "", "")
 	flags.Usage = func() { c.Ui.Error(c.Help()) }
@@ -40,7 +51,11 @@ func (c *ReadCommand) Run(args []string) int {
 		return 2
 	}
 
-	secret, err := client.Logical().Read(path)
+	if c.List {
+		secret, err = client.Logical().List(path)
+	} else {
+		secret, err = client.Logical().Read(path)
+	}
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf(
 			"Error reading %s: %s", path, err))
@@ -55,7 +70,7 @@ func (c *ReadCommand) Run(args []string) int {
 	// Handle single field output
 	if field != "" {
 		if val, ok := secret.Data[field]; ok {
-			c.Ui.Output(val.(string))
+			c.Ui.Output(fmt.Sprintf("%s", val))
 			return 0
 		} else {
 			c.Ui.Error(fmt.Sprintf(
@@ -68,6 +83,9 @@ func (c *ReadCommand) Run(args []string) int {
 }
 
 func (c *ReadCommand) Synopsis() string {
+	if c.List {
+		return "List data in Vault"
+	}
 	return "Read data or secrets from Vault"
 }
 
@@ -77,11 +95,25 @@ Usage: vault read [options] path
 
   Read data from Vault.
 
-  Read reads data at the given path from Vault. This can be used to
-  read secrets and configuration as well as generate dynamic values from
+  Reads data at the given path from Vault. This can be used to read
+  secrets and configuration as well as generate dynamic values from
   materialized backends. Please reference the documentation for the
   backends in use to determine key structure.
+`
 
+	if c.List {
+		helpText =
+			`
+Usage: vault list [options] path
+
+  List data from Vault.
+
+  Retrieve a listing of available data. The data returned is
+  backend-specific, and not all backends implement listing capability.
+`
+	}
+
+	helpText += `
 General Options:
 
   ` + generalOptionsUsage() + `
@@ -92,7 +124,7 @@ Read Options:
                           delimited table. This can also be json.
 
   -field=field            If included, the raw value of the specified field
-  						  will be output raw to stdout.
+                          will be output raw to stdout.
 
 `
 	return strings.TrimSpace(helpText)
