@@ -21,12 +21,10 @@ func TestBackend_basic(t *testing.T) {
 		Steps: []logicaltest.TestStep{
 			testAccStepWritePolicy(t, "test", false),
 			testAccStepReadPolicy(t, "test", false, false),
-			testAccStepReadRaw(t, "test", false, false),
 			testAccStepEncrypt(t, "test", testPlaintext, decryptData),
 			testAccStepDecrypt(t, "test", testPlaintext, decryptData),
 			testAccStepDeletePolicy(t, "test"),
 			testAccStepReadPolicy(t, "test", true, false),
-			testAccStepReadRaw(t, "test", true, false),
 		},
 	})
 }
@@ -53,12 +51,10 @@ func TestBackend_basic_derived(t *testing.T) {
 		Steps: []logicaltest.TestStep{
 			testAccStepWritePolicy(t, "test", true),
 			testAccStepReadPolicy(t, "test", false, true),
-			testAccStepReadRaw(t, "test", false, true),
 			testAccStepEncryptContext(t, "test", testPlaintext, "my-cool-context", decryptData),
 			testAccStepDecrypt(t, "test", testPlaintext, decryptData),
 			testAccStepDeletePolicy(t, "test"),
 			testAccStepReadPolicy(t, "test", true, true),
-			testAccStepReadRaw(t, "test", true, true),
 		},
 	})
 }
@@ -112,50 +108,6 @@ func testAccStepReadPolicy(t *testing.T, name string, expectNone, derived bool) 
 			}
 			// Should NOT get a key back
 			if d.Key != nil {
-				return fmt.Errorf("bad: %#v", d)
-			}
-			if d.Derived != derived {
-				return fmt.Errorf("bad: %#v", d)
-			}
-			if derived && d.KDFMode != kdfMode {
-				return fmt.Errorf("bad: %#v", d)
-			}
-			return nil
-		},
-	}
-}
-
-func testAccStepReadRaw(t *testing.T, name string, expectNone, derived bool) logicaltest.TestStep {
-	return logicaltest.TestStep{
-		Operation: logical.ReadOperation,
-		Path:      "raw/" + name,
-		Check: func(resp *logical.Response) error {
-			if resp == nil && !expectNone {
-				return fmt.Errorf("missing response")
-			} else if expectNone {
-				if resp != nil {
-					return fmt.Errorf("response when expecting none")
-				}
-				return nil
-			}
-			var d struct {
-				Name       string `mapstructure:"name"`
-				Key        []byte `mapstructure:"key"`
-				CipherMode string `mapstructure:"cipher_mode"`
-				Derived    bool   `mapstructure:"derived"`
-				KDFMode    string `mapstructure:"kdf_mode"`
-			}
-			if err := mapstructure.Decode(resp.Data, &d); err != nil {
-				return err
-			}
-
-			if d.Name != name {
-				return fmt.Errorf("bad: %#v", d)
-			}
-			if d.CipherMode != "aes-gcm" {
-				return fmt.Errorf("bad: %#v", d)
-			}
-			if len(d.Key) != 32 {
 				return fmt.Errorf("bad: %#v", d)
 			}
 			if d.Derived != derived {
